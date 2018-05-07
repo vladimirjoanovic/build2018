@@ -103,10 +103,6 @@
         "appServicePlanName":{
             "type": "string",
             "defaultValue": "[concat(parameters('webAppName'),'plan',uniquestring(deployment().name))]"
-        }, 
-        "proxyDNS":{
-            "type": "bool",
-            "defaultValue": false
         }
     },
     "resources": [
@@ -288,27 +284,6 @@
                 "[resourceId('Microsoft.TerraformOSS/resources/','DNSCName')]"
 
             ]
-        },
-        {
-            "type": "Microsoft.TerraformOSS/resources",
-            "apiVersion": "2018-05-01-preview",
-            "name": "ProxyDNS",
-            "location": "westcentralus",
-            "condition": "[parameters('proxyDNS')]",
-            "dependsOn": [
-                "[resourceId('Microsoft.Web/sites/hostnameBindings', parameters('webAppName'),concat(parameters('domainnamelabel'),'.',parameters('domain')))]"
-            ],
-            "properties": {
-                "providerId": "[resourceId('Microsoft.TerraformOSS/providerregistrations','CloudFlare')]",
-                "resourceType": "cloudflare_record",
-                "settings": {
-                    "domain": "[parameters('domain')]",
-                    "name": "[parameters('domainnamelabel')]",
-                    "value": "[concat(parameters('webAppName'),'.azurewebsites.net')]",
-                    "type": "CNAME",
-                    "proxied": true
-                }
-            }
         }
     ]
 }
