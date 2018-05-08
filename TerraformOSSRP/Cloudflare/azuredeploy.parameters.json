@@ -22,6 +22,12 @@
         }, 
         "location":{
             "value": ""
+        },
+        "tfRPlocation":{
+            "value": "westcentralus"
+        },
+        "proxied":{
+            "value": true
         }
     }
 }

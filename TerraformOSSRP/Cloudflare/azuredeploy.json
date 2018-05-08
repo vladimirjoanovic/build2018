@@ -13,9 +13,22 @@
         "mySqlAdministratorPassword": {
             "type": "securestring"
         },
+        "tfRPlocation": {
+            "type": "string",
+            "allowedValues": [
+                "westcentralus",
+                "northeurope"
+            ],
+            "metadata": {
+                "description": "Location of TF RP resources (only available in 2 locations for initial private preview)"
+            }
+        },
         "location": {
             "type": "string",
-            "defaultValue": "[ResourceGroup().location]"
+            "defaultValue": "[ResourceGroup().location]",
+            "metadata": {
+                "description": "Location of resources (except insights and TF RP)"
+            }
         },
         "mySqlServerName": {
             "type": "string",
@@ -23,7 +36,7 @@
         },
         "mySqlSkuCapacity": {
             "type": "int",
-            "defaultValue": 2        
+            "defaultValue": 2
         },
         "mySqlSkuFamily": {
             "type": "string",
@@ -76,21 +89,21 @@
                 "description": "Domain Name Label to assign to the webapp in Cloudflare DNS Service"
             }
         },
-        "email":{
+        "email": {
             "type": "string",
             "metadata": {
                 "description": "Email address for the account at Cloudflare"
             }
         },
-        "token":{
-            "type":"securestring",
+        "token": {
+            "type": "securestring",
             "metadata": {
                 "description": "API Token for the account at Cloudflare"
             }
         },
-        "insightLocation" :{
+        "insightLocation": {
             "type": "string",
-            "defaultValue": "NorthEurope", 
+            "defaultValue": "NorthEurope",
             "allowedValues": [
                 "EastUS",
                 "SouthCentralUS",
@@ -98,12 +111,29 @@
                 "WestEurope",
                 "SoutheastAsia",
                 "WestUS2"
-            ]   
-        }, 
-        "appServicePlanName":{
+            ]
+        },
+        "appServicePlanName": {
             "type": "string",
             "defaultValue": "[concat(parameters('webAppName'),'plan',uniquestring(deployment().name))]"
+        },
+        "_artifactsLocation": {
+            "type": "string",
+            "metadata": {
+                "description": "The base URI where artifacts required by this template are located including a trailing '/'"
+            },
+            "defaultValue": "[deployment().properties.templateLink.uri]"
+        },
+        "proxied":{
+            "type": "bool",
+            "metadata": {
+                "description": "Is traffic proxied by Cloudflare"
+            },
+            "defaultValue": false
         }
+    },
+    "variables": {
+        "nestedTemplateUri": "[uri(parameters('_artifactsLocation'), concat('nestedTemplates/cloudflaredns.json'))]"
     },
     "resources": [
         {
@@ -113,7 +143,7 @@
             "location": "[parameters('insightLocation')]",
             "properties": {
                 "ApplicationId": "[parameters('webAppName')]",
-                "Application_Type":"web"
+                "Application_Type": "web"
             }
         },
         {
@@ -124,9 +154,9 @@
             "properties": {
                 "name": "[parameters('appServicePlanName')]"
             },
-            "kind":"linux",
+            "kind": "linux",
             "sku": {
-                "name" : "D1",
+                "name": "D1",
                 "tier": "Shared",
                 "size": "D1",
                 "family": "D",
@@ -241,7 +271,7 @@
         {
             "type": "Microsoft.TerraformOSS/providerregistrations",
             "apiVersion": "2018-05-01-preview",
-            "location": "westcentralus",
+            "location": "[parameters('tfRPlocation')]",
             "name": "CloudFlare",
             "properties": {
                 "providerType": "cloudflare",
@@ -252,38 +282,96 @@
             }
         },
         {
-            "type": "Microsoft.TerraformOSS/resources",
-            "apiVersion": "2018-05-01-preview",
-            "name": "DNSCName",
-            "location": "westcentralus",
+            "name": "SetupDNSCName",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2018-02-01",
             "dependsOn": [
                 "[resourceId('Microsoft.TerraformOSS/providerregistrations', 'CloudFlare')]",
                 "[resourceId('Microsoft.Web/Sites', parameters('webAppName'))]"
             ],
             "properties": {
-                "providerId": "[resourceId('Microsoft.TerraformOSS/providerregistrations','CloudFlare')]",
-                "resourceType": "cloudflare_record",
-                "settings": {
-                    "domain": "[parameters('domain')]",
-                    "name": "[parameters('domainnamelabel')]",
-                    "value": "[concat(parameters('webAppName'),'.azurewebsites.net')]",
-                    "type": "CNAME",
-                    "proxied": false
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('nestedTemplateUri')]"
+                },
+                "parameters": {
+                    "resourceName": {
+                        "value": "DNSCName"
+                    },
+                    "location": {
+                        "value": "[parameters('tfRPlocation')]"
+                    },
+                    "providerId": {
+                        "value": "[resourceId('Microsoft.TerraformOSS/providerregistrations','CloudFlare')]"
+                    },
+                    "domain": {
+                        "value": "[parameters('domain')]"
+                    },
+                    "domainnamelabel": {
+                        "value": "[parameters('domainnamelabel')]"
+                    },
+                    "dnsRecordValue": {
+                        "value": "[concat(parameters('webAppName'),'.azurewebsites.net')]"
+                    },
+                    "dnsRecordType": {
+                        "value": "CNAME"
+                    },
+                    "proxied": {
+                        "value": false
+                    }
                 }
             }
         },
         {
-
-            "type":"Microsoft.Web/sites/hostnameBindings",
-            "name":"[concat(parameters('webAppName'), '/', parameters('domainnamelabel'),'.',parameters('domain'))]",
-            "apiVersion":"2016-03-01",
-            "location":"[resourceGroup().location]",
-            "properties":{
-            },
+            "type": "Microsoft.Web/sites/hostnameBindings",
+            "name": "[concat(parameters('webAppName'), '/', parameters('domainnamelabel'),'.',parameters('domain'))]",
+            "apiVersion": "2016-03-01",
+            "location": "[resourceGroup().location]",
+            "properties": {},
             "dependsOn": [
-                "[resourceId('Microsoft.TerraformOSS/resources/','DNSCName')]"
-
+                "[resourceId('Microsoft.Resources/deployments/','SetupDNSCName')]"
             ]
+        },
+        {
+            "name": "UpdateDNSCName",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2018-02-01",
+            "condition":"[parameters('proxied')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites/hostnameBindings', parameters('webAppName'),concat(parameters('domainnamelabel'),'.',parameters('domain')))]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[variables('nestedTemplateUri')]"
+                },
+                "parameters": {
+                    "resourceName": {
+                        "value": "DNSCName"
+                    },
+                    "location": {
+                        "value": "[parameters('tfRPlocation')]"
+                    },
+                    "providerId": {
+                        "value": "[resourceId('Microsoft.TerraformOSS/providerregistrations','CloudFlare')]"
+                    },
+                    "domain": {
+                        "value": "[parameters('domain')]"
+                    },
+                    "domainnamelabel": {
+                        "value": "[parameters('domainnamelabel')]"
+                    },
+                    "dnsRecordValue": {
+                        "value": "[concat(parameters('webAppName'),'.azurewebsites.net')]"
+                    },
+                    "dnsRecordType": {
+                        "value": "CNAME"
+                    },
+                    "proxied": {
+                        "value": "[parameters('proxied')]"
+                    }
+                }
+            }
         }
     ]
 }
