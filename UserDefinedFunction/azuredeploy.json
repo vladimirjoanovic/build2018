@@ -14,7 +14,7 @@
           ],
           "output": {
             "type": "string",
-            "value": "[concat('http://', parameters('storageAccountName'), '.blob.core.windows.net')]"
+            "value": "[reference(concat('Microsoft.Storage/storageAccounts/', parameters('storageAccountName')), '2018-02-01').primaryEndpoints.blob]"
           }
         },
         "date": {
